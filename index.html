@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SumUp Payment</title>
+    <link rel="stylesheet" href="/pico.min.css" />
+    <style>
+      pre {
+        background-color: #f5f5f5;
+        border: 1px solid #ccc;
+        padding: 10px;
+        border-radius: 5px;
+        overflow: auto;
+      }
+    </style>
+    <script src="https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js"></script>
+  </head>
+  <body>
+    <main class="container">
+      <h2>SumUp Pay Test</h2>
+      <div id="sumup-card"></div>
+      <div id="pay-form">
+        <fieldset>
+          <label>Amount</label>
+          <input
+            type="number"
+            id="amount"
+            step="0.01"
+            placeholder="0.00"
+            value="5.67"
+          />
+        </fieldset>
+        <button id="pay-button" onClick="onPay()">Pay</button>
+      </div>
+      <div id="widgetResponse" style="display: none">
+        <label>Widget response:</label>
+        <pre></pre>
+      </div>
+      <div id="serverCheckoutResponse" style="display: none">
+        <label>Server check response:</label>
+        <pre></pre>
+      </div>
+    </main>
+    <script>
+      function onPay() {
+        var amount = document.getElementById("amount").value;
+        amount = parseFloat(amount).toFixed(2);
+
+        hideElement("pay-form");
+
+        const requestOptions = {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ command: "createcheckout", amount: amount }),
+        };
+
+        fetch("/checkout.php", requestOptions)
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.checkoutId) {
+              const checkoutId = data.checkoutId;
+              console.log("checkoutId:", checkoutId);
+
+              SumUpCard.mount({
+                id: "sumup-card",
+                checkoutId: checkoutId,
+                locale: "de-DE",
+                country: "DE",
+                onResponse: function (type, body) {
+                  showElement(
+                    "widgetResponse",
+                    JSON.stringify(type) + "\n" + JSON.stringify(body, null, 2)
+                  );
+                  console.log(
+                    JSON.stringify(type),
+                    JSON.stringify(body, null, 2)
+                  );
+                  if (type == "success") {
+                    const requestOptions = {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        command: "getcheckoutstatus",
+                        checkoutid: checkoutId,
+                      }),
+                    };
+                    fetch("/checkout.php", requestOptions)
+                      .then((response) => response.json())
+                      .then((data) => {
+                        if (data.id) {
+                          showElement(
+                            "serverCheckoutResponse",
+                            JSON.stringify(data, null, 2)
+                          );
+                          console.log(JSON.stringify(data, null, 2));
+                        } else {
+                          showElement(
+                            "widgetResponse",
+                            JSON.stringify(data, null, 2)
+                          );
+                          console.error(data.error);
+                        }
+                      });
+                  }
+                },
+              });
+            } else {
+              showElement("widgetResponse", JSON.stringify(data, null, 2));
+              console.error(data.error);
+            }
+          })
+          .catch((error) => console.error("Error:", error));
+      }
+
+      function showElement(elementId, text = "") {
+        var oDiv, p;
+        oDiv = document.getElementById(elementId);
+        oDiv.style.display = "block";
+        if (text.length > 0) {
+          p = oDiv.querySelector("pre");
+          p.textContent = text;
+        }
+      }
+      function hideElement(elementId) {
+        var oDiv, p;
+        oDiv = document.getElementById(elementId);
+        oDiv.style.display = "none";
+      }
+    </script>
+  </body>
+</html>
